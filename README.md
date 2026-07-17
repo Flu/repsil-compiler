@@ -37,17 +37,18 @@ project-foo
 
 The directory `mod` is automatically considered a package if it has a valid `mod.rpsl` inside it and all functions in it must be namespaced with `mod:` if they are to be used in `main.rspl`. In this package structure, `mod.rpsl` should contain the export list of that package. In other words, `other.rpsl` may contain 10 functions, only 2 of which a user might want to export so they can be used in `main.rspl`. As such, `mod.rspl` would look like this:
 ```lisp
-(import :other)
+(defimport :other)
 
-(export other:func-foo)
-(export other:func-bar)
+(export
+	other:func-foo
+	other:func-bar)
 ```
 
 Here it is shown that it is also possible to import individual files as packages. Indeed, if a package is not big or complex enough to merit being in its own directory, it can just be a single file in the top-level, in which case all of its symbols will be exported.
 
 If we wanted to use those exported functions in `main.rpsl`, it would look like this:
 ```lisp
-(import :mod)
+(defimport :mod)
 
 (defun main :int ()
 	(mod:func-foo)
