@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Lexer(identifier, reserved, withSpan, symbol, integerLiteral, floatLiteral) where
+module Lexer(Span(..), identifier, reserved, withSpan, symbol, integerLiteral, floatLiteral, parens) where
 
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -66,3 +66,6 @@ integerLiteral = L.signed sc natural
 
 floatLiteral :: Parser Float
 floatLiteral = L.signed sc (lexeme L.float)
+
+parens :: Parser a -> Parser a
+parens = between (symbol "(") (symbol ")")

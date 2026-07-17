@@ -1,6 +1,7 @@
 module Ast where
 
 import Data.Text
+import Lexer (Span(..))
 
 data Identifier = Identifier Text Text
 
@@ -15,24 +16,24 @@ data Val =
   | VList Expr
 
 data Defun =
-  Defun Identifier Atom [(Val, Identifier)] Expr
+  Defun Span Identifier Atom [(Val, Identifier)] Expr
 
 data Expr =
-  FunCallExpr Identifier [Expr]
-  | PrognExpr [Expr]
-  | IfExpr Expr Expr Expr
-  | LetExpr [(Atom, Identifier, Expr)] Expr
-  | VarExpr Identifier
-  | LitExpr Val
+  FunCallExpr Span Identifier [Expr]
+  | PrognExpr Span [Expr]
+  | IfExpr Span Expr Expr Expr
+  | LetExpr Span [(Atom, Identifier, Expr)] Expr
+  | VarExpr Span Identifier
+  | LitExpr Span Val
 
 data Defvar =
-  Defvar Atom Identifier Expr
+  Defvar Span Atom Identifier Expr
 
-newtype ImportDir =
-  ImportDir Atom
+data ImportDir =
+  ImportDir Span Atom
 
-newtype ExportList =
-  ExportList [Identifier]
+data ExportList =
+  ExportList Span [Identifier]
 
 data TopLevel =
   Imports [ImportDir]
