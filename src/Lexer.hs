@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Lexer(identifier, reserved, withSpan, symbol) where
+module Lexer(identifier, reserved, withSpan, symbol, integerLiteral, floatLiteral) where
 
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -57,3 +57,12 @@ identifier = lexeme $ try $ do
 
 reserved :: Text -> Parser ()
 reserved kw = lexeme $ try $ string kw *> notFollowedBy identFollowChars
+  
+natural :: Parser Int
+natural = lexeme L.decimal
+
+integerLiteral :: Parser Int
+integerLiteral = L.signed sc natural
+
+floatLiteral :: Parser Float
+floatLiteral = L.signed sc (lexeme L.float)
