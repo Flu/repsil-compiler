@@ -1,0 +1,14 @@
+;; Comment
+(defvar :int global-var 4)
+
+(defun some-function :int ((:int x) (:int y))
+  (+ x y))
+
+;; Return a random negative number
+(defun random-negative-number :int ()
+  -7)
+
+(defun function-with-an-if :int ((:bool value))
+  (if value
+      5
+      (+ 9 0)))
