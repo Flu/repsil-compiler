@@ -12,3 +12,6 @@
   (if value
       5
       (+ 9 0)))
+
+;; Just for shits and giggles
+(defvar :int errno 0)
