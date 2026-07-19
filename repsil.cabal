@@ -27,6 +27,7 @@ library
   exposed-modules:
       Ast
       Lexer
+      PackageResolver
       Parser
   other-modules:
       Paths_repsil

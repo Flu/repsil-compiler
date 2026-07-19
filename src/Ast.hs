@@ -3,42 +3,51 @@ module Ast where
 import Data.Text
 import Lexer (Span(..))
 
-data Identifier = Identifier Text Text
+data Identifier = Identifier (Maybe Text) Text
+  deriving (Ord, Eq, Show, Read)
 
 newtype Atom = Atom Text
+  deriving (Ord, Eq, Show, Read)
 
 data Val =
   VInt Int
   | VFloat Float
-  | VText Text
+  | VString Text
   | VBool Bool
   | VChar Char
   | VList Expr
+  deriving (Ord, Eq, Show, Read)
 
 data Defun =
-  Defun Span Identifier Atom [(Val, Identifier)] Expr
+  Defun Identifier Atom [(Atom, Identifier)] Expr Span
+  deriving (Ord, Eq, Show, Read)
 
 data Expr =
-  FunCallExpr Span Identifier [Expr]
-  | PrognExpr Span [Expr]
-  | IfExpr Span Expr Expr Expr
-  | LetExpr Span [(Atom, Identifier, Expr)] Expr
-  | VarExpr Span Identifier
-  | LitExpr Span Val
+  FunCallExpr Identifier [Expr] Span
+  | PrognExpr [Expr] Span
+  | IfExpr Expr Expr Expr Span
+  | LetExpr [(Atom, Identifier, Expr)] Expr Span
+  | VarExpr Identifier Span
+  | LitExpr Val Span
+  deriving (Ord, Eq, Show, Read)
 
 data Defvar =
-  Defvar Span Atom Identifier Expr
+  Defvar Atom Identifier Expr Span
+  deriving (Ord, Eq, Show, Read)
 
 data ImportDir =
-  ImportDir Span Atom
+  ImportDir Atom Span
+  deriving (Ord, Eq, Show, Read)
 
 data ExportList =
-  ExportList Span [Identifier]
+  ExportList [Identifier] Span
+  deriving (Ord, Eq, Show, Read)
 
 data TopLevel =
-  Imports [ImportDir]
-  | Exports [ExportList]
-  | Vars [Defvar]
-  | Funs [Defun]
+  Import ImportDir
+  | Export ExportList
+  | Var Defvar
+  | Fun Defun
+  deriving (Ord, Eq, Show, Read)
 
 type Module = [TopLevel]

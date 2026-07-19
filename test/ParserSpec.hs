@@ -1,11 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ParserSpec (spec) where
 
+import qualified Data.Text as T
 import Test.Hspec
 import Test.Hspec.Megaparsec
 import Text.Megaparsec (parse)
 
-import Lexer (identifier, integerLiteral, floatLiteral)
+import Lexer (Span(..), identifier, integerLiteral, floatLiteral)
+import Parser
+import Ast
 
 spec :: Spec
 spec = do
@@ -31,5 +34,25 @@ spec = do
       parse floatLiteral "" "-0.45e19" `shouldParse` (-0.45e19)
       parse floatLiteral "" `shouldFailOn` "Nan"
       parse floatLiteral "" `shouldFailOn` "Inf"
-      
-
+  describe "Parser functionality" $ do
+    it "can parse atoms" $ do
+      parse pAtom "" ":some-atom" `shouldParse` Atom "some-atom"
+    it "can parse identifiers" $ do
+      parse pIdentifier "" "namespace::id" `shouldParse` Identifier (Just "namespace") "id"
+      parse pIdentifier "" "normal-identifier" `shouldParse` Identifier Nothing "normal-identifier"
+      parse pIdentifier "" "separate-id :atom" `shouldParse` Identifier Nothing "separate-id"
+    it "can parse imports and exports" $ do
+      parse pImportDir "" "(defimport :some-package)"
+        `shouldParse` ImportDir (Atom "some-package") (Span 0 25)
+      parse pExportList "" "(defpackage mod::func mod::func2 util)"
+        `shouldParse` ExportList [
+        Identifier (Just "mod") "func",
+        Identifier (Just "mod") "func2",
+        Identifier Nothing "util"
+        ] (Span 0 38)
+    it "can parse a syntactically correct program" $ do
+      source <- readFile "test/test_files/complete_program.rpsl"
+      parse parseFile "" `shouldSucceedOn` T.pack source
+    it "can parse a module declaration file" $ do
+      source <- readFile "test/test_files/module_decl.rpsl"
+      parse parseFile "" `shouldSucceedOn` T.pack source

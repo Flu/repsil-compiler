@@ -1,5 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Lexer(Span(..), identifier, reserved, withSpan, symbol, integerLiteral, floatLiteral, parens) where
+module Lexer(
+  Span(..),
+  Parser,
+  sc,
+  identifier,
+  reserved,
+  withSpan,
+  symbol,
+  integerLiteral,
+  floatLiteral,
+  charLiteral,
+  stringLiteral,
+  boolLiteral,
+  parens) where
 
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -18,10 +31,11 @@ instance ShowErrorComponent ParserError where
 
 type Parser = Parsec ParserError Text
 
-data Span = Span Int Int deriving (Eq, Show)
+data Span = Span Int Int
+  deriving (Ord, Eq, Show, Read)
 
 reservedWords :: [Text]
-reservedWords = ["let", "if", "defun", "export", "defimport"]
+reservedWords = ["let", "if", "defun", "export", "defimport", "true", "false"]
 
 identStartChars :: Parser Char
 identStartChars = letterChar <|> oneOf ("+*/^@$%&<>=!?_" :: String)
@@ -29,12 +43,12 @@ identStartChars = letterChar <|> oneOf ("+*/^@$%&<>=!?_" :: String)
 identFollowChars :: Parser Char
 identFollowChars = identStartChars <|> char '-' <|> digitChar
 
-withSpan :: Parser a -> Parser (a, Span)
+withSpan :: Parser (Span -> a) -> Parser a
 withSpan p = do
   start <- getOffset
   x <- p
   end <- getOffset
-  return (x, Span start end)
+  return (x (Span start end))
 
 sc :: Parser ()
 sc = L.space space1 (L.skipLineComment ";") empty
@@ -66,6 +80,15 @@ integerLiteral = L.signed sc natural
 
 floatLiteral :: Parser Float
 floatLiteral = L.signed sc (lexeme L.float)
+
+charLiteral :: Parser Char
+charLiteral = between (char '\'') (char '\'') L.charLiteral
+
+stringLiteral :: Parser Text
+stringLiteral = T.pack <$> (char '"' >> manyTill L.charLiteral (char '"'))
+
+boolLiteral :: Parser Bool
+boolLiteral = try (True <$ reserved "true") <|> (False <$ reserved "false")
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
