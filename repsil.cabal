@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Ast
+      Error
       Lexer
       PackageResolver
       Parser
@@ -38,8 +39,12 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , containers
+    , directory
+    , filepath
     , megaparsec
     , text
+    , transformers
   default-language: Haskell2010
 
 executable repsil-exe
@@ -53,9 +58,13 @@ executable repsil-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , containers
+    , directory
+    , filepath
     , megaparsec
     , repsil
     , text
+    , transformers
   default-language: Haskell2010
 
 test-suite repsil-test
@@ -73,10 +82,14 @@ test-suite repsil-test
       hspec-discover:hspec-discover
   build-depends:
       base >=4.7 && <5
+    , containers
+    , directory
+    , filepath
     , hspec
     , hspec-contrib
     , hspec-megaparsec
     , megaparsec
     , repsil
     , text
+    , transformers
   default-language: Haskell2010

@@ -4,6 +4,8 @@ module Lexer(
   Parser,
   sc,
   identifier,
+  lexeme,
+  string,
   reserved,
   withSpan,
   symbol,
@@ -15,21 +17,13 @@ module Lexer(
   parens) where
 
 import Data.Text (Text)
+import Data.Void (Void)
 import qualified Data.Text as T
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
-data ParserError =
-  ReservedWordUsed Text
-  | ReservedIdentifier Text
-  deriving (Eq, Ord, Show)
-
-instance ShowErrorComponent ParserError where
-  showErrorComponent (ReservedWordUsed t) = "reserved word used as identifier: " <> T.unpack t
-  showErrorComponent (ReservedIdentifier t) = "this identifier name is reserved: " <> T.unpack t
-
-type Parser = Parsec ParserError Text
+type Parser = Parsec Void Text
 
 data Span = Span Int Int
   deriving (Ord, Eq, Show, Read)
@@ -47,8 +41,7 @@ withSpan :: Parser (Span -> a) -> Parser a
 withSpan p = do
   start <- getOffset
   x <- p
-  end <- getOffset
-  return (x (Span start end))
+  x . Span start <$> getOffset
 
 sc :: Parser ()
 sc = L.space space1 (L.skipLineComment ";") empty
@@ -66,7 +59,7 @@ identifier :: Parser Text
 identifier = lexeme $ try $ do
   name <- rawIdentifier
   if name `elem` reservedWords
-    then customFailure (ReservedWordUsed name)
+    then fail ("reserved word used as identifier: " <> T.unpack name)
     else pure name
 
 reserved :: Text -> Parser ()

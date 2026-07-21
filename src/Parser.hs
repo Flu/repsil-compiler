@@ -34,10 +34,13 @@ pChar :: Parser Val
 pChar = VChar <$> charLiteral
 
 pIdentifier :: Parser Identifier
-pIdentifier = try (Identifier <$> namespaceParser <*> identifier)
-              <|> (Identifier Nothing <$> identifier)
+pIdentifier = do
+  parts <- namespaces
+  return $ case parts of
+    [x] -> Identifier [] x
+    qualified_name -> Identifier (init qualified_name) (last qualified_name)
   where
-    namespaceParser = optional $ identifier <* symbol "::"
+    namespaces = (:) <$> identifier <*> many (string "::" *> identifier)
 
 pDefunArg :: Parser (Atom, Identifier)
 pDefunArg = parens ((,) <$> pAtom <*> pIdentifier)

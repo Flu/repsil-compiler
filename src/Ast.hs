@@ -3,7 +3,7 @@ module Ast where
 import Data.Text
 import Lexer (Span(..))
 
-data Identifier = Identifier (Maybe Text) Text
+data Identifier = Identifier [Text] Text
   deriving (Ord, Eq, Show, Read)
 
 newtype Atom = Atom Text
