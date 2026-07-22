@@ -1,0 +1,8 @@
+;; First comment
+(defimport :std)
+
+;; Some other comment
+(defun func :int () 0)
+
+(defimport :mylibrary)
+(defimport :rustic)

@@ -1,18 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 module PackageResolver where
 
+import Control.Monad (foldM)
 import Control.Monad.Trans.Except
-import qualified Data.Text as T
+import Data.Text (pack, Text)
 import Data.Map hiding (map)
 import Data.Maybe (catMaybes)
 import System.Directory
 import System.FilePath
+import Text.Megaparsec
 
 import Parser
 import Ast
 import Error
+import Control.Monad.IO.Class (MonadIO(liftIO))
 
-type Resolve = ExceptT CompileError IO DependencyGraph
+type Resolve a = ExceptT CompileError IO a
 
 data ModuleLocation = SingleFile FilePath | Package FilePath
   deriving (Show, Read, Eq, Ord)
@@ -21,14 +24,14 @@ data ModuleInfo = ModuleInfo
   {
     moduleType :: ModuleLocation,
     ast :: Module,
-    dependencies :: [FilePath]
+    depends :: [FilePath]
   }
   deriving (Show, Read, Eq, Ord)
 
 type DependencyGraph = Map FilePath ModuleInfo
 
 tempDG :: DependencyGraph
-tempDG = empty
+tempDG = Data.Map.empty
 
 fileExtension :: String
 fileExtension = ".rpsl"
@@ -42,39 +45,89 @@ directoryModuleHasDeclFile dirPath filename = do
   filesInDir <- listDirectory dirPath
   return (filename `elem` filesInDir)
 
-findCandidateModule :: String -> FilePath -> IO (Either ImportError (Maybe ModuleLocation))
+findCandidateModule :: String -> FilePath -> Resolve (Maybe ModuleLocation)
 findCandidateModule moduleName candidateDir = do
   let filePath = candidateDir </> (moduleName ++ fileExtension)
   let dirPath = candidateDir </> moduleName
-  fileExists <- doesFileExist filePath
-  directoryExists <- doesDirectoryExist dirPath
+  fileExists <- liftIO $ doesFileExist filePath
+  directoryExists <- liftIO $  doesDirectoryExist dirPath
   case (fileExists, directoryExists) of
-    (True, False) -> return $ Right (Just (SingleFile filePath))
+    (True, False) -> return $ Just (SingleFile filePath)
     (True, True) -> do
-      dirHasDecl <- directoryModuleHasDeclFile dirPath (moduleName ++ fileExtension)
+      dirHasDecl <- liftIO $ directoryModuleHasDeclFile dirPath (moduleName ++ fileExtension)
       if dirHasDecl
-        then return $ Left (AmbiguousModule moduleName [filePath, dirPath])
-        else return $ Right (Just (SingleFile filePath))
+        then throwE $ ImportError $ AmbiguousModule moduleName [filePath, dirPath]
+        else return $ Just (SingleFile filePath)
     (False, True) -> do
-      dirHasDecl <- directoryModuleHasDeclFile dirPath (moduleName ++ fileExtension)
+      dirHasDecl <- liftIO $ directoryModuleHasDeclFile dirPath (moduleName ++ fileExtension)
       if dirHasDecl
-        then return $ Right (Just (Package dirPath))
-        else return $ Left (ModuleDeclNotFound moduleName dirPath)
-    (False, False) -> return $ Right Nothing
+        then return $ Just (Package dirPath)
+        else throwE $ ImportError $ ModuleDeclNotFound moduleName dirPath
+    (False, False) -> return Nothing
 
-resolveModule :: String -> [FilePath] -> IO (Either ImportError ModuleLocation)
+wrapInCompileError :: Either ImportError ModuleLocation -> Either CompileError ModuleLocation
+wrapInCompileError (Left err) = Left $ ImportError err
+wrapInCompileError (Right success) = Right success
+
+resolveModule :: String -> [FilePath] -> Resolve ModuleLocation
 resolveModule moduleName candidateDirs = do
   possibleMods <- mapM (findCandidateModule moduleName) candidateDirs
-  case sequence possibleMods of
-    (Left err) -> return $ Left err
-    (Right maybeLocations) -> do
-      let locations = catMaybes maybeLocations
-      case locations of
-        [] -> return $ Left $ ModuleNotFound moduleName
-        [location] -> return $ Right location
-        _ -> return $ Left $ AmbiguousModule moduleName (map getPathFromModuleLoc locations)
+  let locations = catMaybes possibleMods
+  case locations of
+    [] -> throwE $ ImportError $ ModuleNotFound moduleName
+    [location] -> return location
+    _ -> throwE $ ImportError $ AmbiguousModule moduleName (map getPathFromModuleLoc locations)
 
-buildDependencyGraph :: String -> FilePath -> [FilePath] -> Resolve
-buildDependencyGraph moduleName cwd candidateDirs = do
-  
+parseFileAndExtractImports :: FilePath -> Text -> Resolve (Module, [String])
+parseFileAndExtractImports filePath source = do
+  case parse parseModule filePath source of
+    Left err -> throwE $ ParseFail err
+    Right moduleAst -> do
+      let imports = extractImports moduleAst
+      return (moduleAst, imports)
+
+buildDependencyGraph :: FilePath -> [FilePath] -> DependencyGraph -> String -> Resolve DependencyGraph
+buildDependencyGraph cwd candidateDirs graph moduleName = do
+  location <- resolveModule moduleName (cwd:candidateDirs)
+  if notMember (getPathFromModuleLoc location) graph then
+    case location of
+      SingleFile path -> do
+        source <- liftIO $ pack <$> readFile path
+        (abstractSyntaxTree, importNames) <- parseFileAndExtractImports path source
+        depPaths <- mapM (`resolveModule` (cwd:candidateDirs)) importNames
+        let entry = ModuleInfo
+              {
+                moduleType = SingleFile path,
+                ast = abstractSyntaxTree,
+                depends = map getPathFromModuleLoc depPaths
+              }
+        finalGraph <- foldM (buildDependencyGraph cwd candidateDirs) (insert path entry graph) importNames
+        return $ insert path entry finalGraph
+        
+      Package dirPath -> do
+        let moduleDeclPath = dirPath </> (moduleName ++ fileExtension)
+        source <- liftIO $ pack <$> readFile moduleDeclPath
+        (abstractSyntaxTree, importNames) <- parseFileAndExtractImports moduleDeclPath source
+        let newCwd = dirPath
+        depPaths <- mapM (`resolveModule` (newCwd:candidateDirs)) importNames
+        let entry = ModuleInfo
+              {
+                moduleType = Package dirPath,
+                ast = abstractSyntaxTree,
+                depends = map getPathFromModuleLoc depPaths
+              }
+        finalGraph <- foldM (buildDependencyGraph newCwd candidateDirs) (insert dirPath entry graph) importNames
+        return $ insert dirPath entry finalGraph
+    else
+    return graph
+
+testRun :: IO DependencyGraph
+testRun = do
+  let cwd = "/home/flu/Cod/repsil-project/"
+  absCwd <- makeAbsolute cwd
+  eitherGraph <- runExceptT (buildDependencyGraph absCwd [] tempDG "repsil-project")
+  case eitherGraph of
+    Left err -> print err
+    Right graph ->
+      print (toList graph)
   return tempDG

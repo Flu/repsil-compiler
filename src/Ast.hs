@@ -1,6 +1,6 @@
 module Ast where
 
-import Data.Text
+import Data.Text (Text, unpack)
 import Lexer (Span(..))
 
 data Identifier = Identifier [Text] Text
@@ -51,3 +51,13 @@ data TopLevel =
   deriving (Ord, Eq, Show, Read)
 
 type Module = [TopLevel]
+
+-- Helper functions for managing the AST
+extractImports :: Module -> [String]
+extractImports moduleAst = map (unpack . extract) filteredImports
+  where
+    isImport (Import _) = True
+    isImport _ = False
+    filteredImports = filter isImport moduleAst
+    extract (Import (ImportDir (Atom sym) _)) = sym
+    extract _ = error "Unreachable condition"

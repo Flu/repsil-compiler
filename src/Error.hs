@@ -7,7 +7,8 @@ import Text.Megaparsec.Error
 data CompileError =
   ImportError ImportError
   | ParseFail (ParseErrorBundle Text Void)
-  
+  deriving (Show, Eq)
+
 data ImportError =
   AmbiguousModule String [FilePath]
   | ModuleNotFound String
