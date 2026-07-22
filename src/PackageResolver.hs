@@ -121,13 +121,37 @@ buildDependencyGraph cwd candidateDirs graph moduleName = do
     else
     return graph
 
-testRun :: IO DependencyGraph
+type VisitationMap = Map FilePath Bool
+
+detectCycleInDG :: FilePath -> DependencyGraph -> Resolve ()
+detectCycleInDG startWithNode dg  = do
+  (_, _) <- detect initVisited initRecStack startWithNode
+  return ()
+  where
+    initVisited :: VisitationMap
+    initVisited = mapWithKey (\_ _ -> False) dg
+    initRecStack :: VisitationMap
+    initRecStack = initVisited
+    detect :: VisitationMap -> VisitationMap -> FilePath -> Resolve (VisitationMap, VisitationMap)
+    detect visited recStack node = do
+      case recStack ! node of
+        True -> throwE (ImportError $ CircularImport node "" "")
+        False -> do
+          case visited ! node of
+            True -> return (visited, recStack)
+            False -> do
+              let markVisited = Data.Map.update (\_ -> Just True) node visited
+              let markOnRecStack = Data.Map.update (\_ -> Just True) node recStack
+              (finalVisited, finalRecStack) <- foldM (\(v, r) nextNode -> do detect v r nextNode)
+                (markVisited, markOnRecStack) (depends (dg ! node))
+              let demarkOnRecStack = Data.Map.update (\_ -> Just False) node finalRecStack
+              return (finalVisited, demarkOnRecStack)
+
+testRun :: Resolve Bool
 testRun = do
-  let cwd = "/home/flu/Cod/repsil-project/"
-  absCwd <- makeAbsolute cwd
-  eitherGraph <- runExceptT (buildDependencyGraph absCwd [] tempDG "repsil-project")
-  case eitherGraph of
-    Left err -> print err
-    Right graph ->
-      print (toList graph)
-  return tempDG
+  let cwd = "/home/flu/Cod/repsil-project"
+  absCwd <- liftIO $ makeAbsolute cwd
+  graph <- buildDependencyGraph absCwd [] tempDG "repsil-project"
+  detectCycleInDG "/home/flu/Cod/repsil-project/repsil-project.rpsl" graph
+  liftIO $ putStrLn "The dependency graph is acyclic"
+  return True
