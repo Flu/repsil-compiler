@@ -2,6 +2,7 @@
 module PackageResolver where
 
 import Control.Monad (foldM)
+import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Except
 import Data.Text (pack, Text)
 import Data.Map hiding (map)
@@ -13,7 +14,6 @@ import Text.Megaparsec
 import Parser
 import Ast
 import Error
-import Control.Monad.IO.Class (MonadIO(liftIO))
 
 type Resolve a = ExceptT CompileError IO a
 
@@ -29,9 +29,6 @@ data ModuleInfo = ModuleInfo
   deriving (Show, Read, Eq, Ord)
 
 type DependencyGraph = Map FilePath ModuleInfo
-
-tempDG :: DependencyGraph
-tempDG = Data.Map.empty
 
 fileExtension :: String
 fileExtension = ".rpsl"
@@ -151,7 +148,7 @@ testRun :: Resolve Bool
 testRun = do
   let cwd = "/home/flu/Cod/repsil-project"
   absCwd <- liftIO $ makeAbsolute cwd
-  graph <- buildDependencyGraph absCwd [] tempDG "repsil-project"
+  graph <- buildDependencyGraph absCwd [] Data.Map.empty "repsil-project"
   detectCycleInDG "/home/flu/Cod/repsil-project/repsil-project.rpsl" graph
   liftIO $ putStrLn "The dependency graph is acyclic"
   return True
