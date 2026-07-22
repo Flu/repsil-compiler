@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module PackageResolver where
 
-import Control.Monad (foldM)
+import Control.Monad (foldM, mapAndUnzipM)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Except
 import Data.Text (pack, Text)
@@ -20,11 +20,17 @@ type Resolve a = ExceptT CompileError IO a
 data ModuleLocation = SingleFile FilePath | Package FilePath
   deriving (Show, Read, Eq, Ord)
 
+data ExportEntry = EFunc Text Text
+  deriving (Show, Read, Eq, Ord)
+
+type ExportTable = Map Text ExportEntry
+
 data ModuleInfo = ModuleInfo
   {
     moduleType :: ModuleLocation,
     ast :: Module,
-    depends :: [FilePath]
+    depends :: [(Text, FilePath)],
+    exports :: ExportTable
   }
   deriving (Show, Read, Eq, Ord)
 
@@ -66,13 +72,13 @@ wrapInCompileError :: Either ImportError ModuleLocation -> Either CompileError M
 wrapInCompileError (Left err) = Left $ ImportError err
 wrapInCompileError (Right success) = Right success
 
-resolveModule :: String -> [FilePath] -> Resolve ModuleLocation
+resolveModule :: String -> [FilePath] -> Resolve (Text, ModuleLocation)
 resolveModule moduleName candidateDirs = do
   possibleMods <- mapM (findCandidateModule moduleName) candidateDirs
   let locations = catMaybes possibleMods
   case locations of
     [] -> throwE $ ImportError $ ModuleNotFound moduleName
-    [location] -> return location
+    [location] -> return (pack moduleName, location)
     _ -> throwE $ ImportError $ AmbiguousModule moduleName (map getPathFromModuleLoc locations)
 
 parseFileAndExtractImports :: FilePath -> Text -> Resolve (Module, [String])
@@ -85,18 +91,18 @@ parseFileAndExtractImports filePath source = do
 
 buildDependencyGraph :: FilePath -> [FilePath] -> DependencyGraph -> String -> Resolve DependencyGraph
 buildDependencyGraph cwd candidateDirs graph moduleName = do
-  location <- resolveModule moduleName (cwd:candidateDirs)
+  (_, location) <- resolveModule moduleName (cwd:candidateDirs)
   if notMember (getPathFromModuleLoc location) graph then
     case location of
       SingleFile path -> do
         source <- liftIO $ pack <$> readFile path
         (abstractSyntaxTree, importNames) <- parseFileAndExtractImports path source
-        depPaths <- mapM (`resolveModule` (cwd:candidateDirs)) importNames
+        (depNames, depPaths) <- mapAndUnzipM (`resolveModule` (cwd:candidateDirs)) importNames
         let entry = ModuleInfo
               {
                 moduleType = SingleFile path,
                 ast = abstractSyntaxTree,
-                depends = map getPathFromModuleLoc depPaths
+                depends = zip depNames $ map getPathFromModuleLoc depPaths
               }
         finalGraph <- foldM (buildDependencyGraph cwd candidateDirs) (insert path entry graph) importNames
         return $ insert path entry finalGraph
@@ -106,12 +112,12 @@ buildDependencyGraph cwd candidateDirs graph moduleName = do
         source <- liftIO $ pack <$> readFile moduleDeclPath
         (abstractSyntaxTree, importNames) <- parseFileAndExtractImports moduleDeclPath source
         let newCwd = dirPath
-        depPaths <- mapM (`resolveModule` (newCwd:candidateDirs)) importNames
+        (depNames, depPaths) <- mapAndUnzipM (`resolveModule` (newCwd:candidateDirs)) importNames
         let entry = ModuleInfo
               {
                 moduleType = Package dirPath,
                 ast = abstractSyntaxTree,
-                depends = map getPathFromModuleLoc depPaths
+                depends = zip depNames $ map getPathFromModuleLoc depPaths
               }
         finalGraph <- foldM (buildDependencyGraph newCwd candidateDirs) (insert dirPath entry graph) importNames
         return $ insert dirPath entry finalGraph
@@ -129,6 +135,8 @@ detectCycleInDG startWithNode dg  = do
     initVisited = mapWithKey (\_ _ -> False) dg
     initRecStack :: VisitationMap
     initRecStack = initVisited
+    takeEverySnd :: [(a,b)] -> [b]
+    takeEverySnd = map snd
     detect :: VisitationMap -> VisitationMap -> FilePath -> Resolve (VisitationMap, VisitationMap)
     detect visited recStack node = do
       case recStack ! node of
@@ -139,11 +147,12 @@ detectCycleInDG startWithNode dg  = do
             False -> do
               let markVisited = Data.Map.update (\_ -> Just True) node visited
               let markOnRecStack = Data.Map.update (\_ -> Just True) node recStack
+              let 
               (finalVisited, finalRecStack) <- foldM (\(v, r) nextNode -> do detect v r nextNode)
-                (markVisited, markOnRecStack) (depends (dg ! node))
+                (markVisited, markOnRecStack) (takeEverySnd (depends (dg ! node)))
               let demarkOnRecStack = Data.Map.update (\_ -> Just False) node finalRecStack
               return (finalVisited, demarkOnRecStack)
-
+  
 testRun :: Resolve Bool
 testRun = do
   let cwd = "/home/flu/Cod/repsil-project"
