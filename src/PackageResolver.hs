@@ -102,7 +102,8 @@ buildDependencyGraph cwd candidateDirs graph moduleName = do
               {
                 moduleType = SingleFile path,
                 ast = abstractSyntaxTree,
-                depends = zip depNames $ map getPathFromModuleLoc depPaths
+                depends = zip depNames $ map getPathFromModuleLoc depPaths,
+                exports = Data.Map.empty
               }
         finalGraph <- foldM (buildDependencyGraph cwd candidateDirs) (insert path entry graph) importNames
         return $ insert path entry finalGraph
@@ -117,7 +118,8 @@ buildDependencyGraph cwd candidateDirs graph moduleName = do
               {
                 moduleType = Package dirPath,
                 ast = abstractSyntaxTree,
-                depends = zip depNames $ map getPathFromModuleLoc depPaths
+                depends = zip depNames $ map getPathFromModuleLoc depPaths,
+                exports = Data.Map.empty
               }
         finalGraph <- foldM (buildDependencyGraph newCwd candidateDirs) (insert dirPath entry graph) importNames
         return $ insert dirPath entry finalGraph
